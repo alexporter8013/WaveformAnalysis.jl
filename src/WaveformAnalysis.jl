@@ -1,11 +1,8 @@
 module WaveformAnalysis
 
-import DataStructures.CircularBuffer
+export RMS, pkpk, ActiveHigh, ActiveLow, Rising, Falling
 
-export RMS, mean, pkpk, ActiveHigh, ActiveLow, Rising, Falling
-
-RMS(x::Vector{T}) where T <: Real = sqrt.(sum(x.^2)./size(x))
-mean(x::Vector{T}) where T <: Real = sum(x)./length(x)
+RMS(x::Vector{T}) where T <: Real = sqrt.(sum(x.^2)./length(x))
 pkpk(x::Vector{T}) where {T <: Real} = maximum(x) - minimum(x)
 
 
@@ -14,43 +11,31 @@ pkpk(x::Vector{T}) where {T <: Real} = maximum(x) - minimum(x)
 
 export detectcross, detectcrosses
 
-function detectcross(x::Vector{T}, thresh::T, edge::Edge) where {T <: Real}
-    start = findfirst(edge == Rising::Edge ? x .< thresh : x .> thresh);
-    if start != nothing
-        index = findfirst(edge == Rising::Edge ? x[start:end] .>= thresh : x[start:end] .<= thresh);
-    end
-    try
-        index + start - 1
-    catch MethodError #comes up if we get a "nothing" from findfirst and try to mix it with an int
-        nothing
-    end
-end
-
 function detectcrosses(x::Vector{T}, thresh::T, edge::Edge) where {T <: Real}
-    crosses = Vector{Int64}()
-    keepgoing = true
-    _index = 0
-    while keepgoing
-        cross = detectcross(x[_index:end], thresh, edge)
-        if cross != nothing
-            _index = cross + sum(crosses)
-            push!(crosses, _index)
-        else
-            keepgoing = false
-        end
-    end
-    crosses
+    events = (edge == Rising ? x .>= thresh : x .<= thresh)
+    findall(events .& (.~events >> 1))
 end
 
+detectcrosses(x::Vector{Bool}, edge::Edge) = detectcrosses(BitVector(x), edge)
+detectcrosses(x::BitVector, edge::Edge) = edge == Rising ? findall(x .& (.~x >> 1)) : findall(x >> 1 .& (.~x))
+
+function detectcross(x::Vector{T}, thresh::T, edge::Edge) where {T <: Real}
+    results = detectcrosses(x,thresh,edge)
+    (isempty(results) ? nothing : results[1])
+end
+
+function detectcross(x::BitVector, edge::Edge)
+    results = detectcrosses(x, edge)
+    (isempty(result) ? nothing : results[1])
+end
+
+detectcross(x::Vector{Bool}, edge::Edge) = detectcross(x, edge)
 
 
-
-
-export edgetime, pulse, period
+export edgetime, pulse, period, periods, pulses
 
 function edgetime(x::Vector{T}, edge::Edge) where {T <: Real}
-    _min = minimum(x)
-    _max = maximum(x)
+    _min, _max = extrema(x)
     top = (_max - _min)*9/10 + _min
     bottom = (_max - _min)/10 + _min
     try
@@ -61,53 +46,71 @@ function edgetime(x::Vector{T}, edge::Edge) where {T <: Real}
 end
 
 function pulse(x::Vector{T}, pol::Polarity) where {T <: Real}
-    _min = minimum(x)
-    _max = maximum(x)
-    mid = 0.5(_max + _min)
-    firstedge = (pol == ActiveHigh ? detectcross(x, mid, Rising::Edge)
-                                    : detectcross(x, mid, Falling::Edge))
-    pulse_width = (pol == ActiveHigh ? detectcross(x[firstedge + 1:end], mid, Falling::Edge)
-                                    : detectcross(x[firstedge + 1:end], mid, Rising::Edge))
-    pulse_width
+    results = pulses(x,pol)[1]
+    
 end
 
-
-
-function period(x::Vector{T}) where {T <: Real}
-    _min = minimum(x)
-    _max = maximum(x)
-    mid = 0.5(_max + _min)
-    firstedge = detectcross(x, mid, Rising::Edge)
-    period = detectcross(x[firstedge + 1:end], mid, Rising::Edge)
-    period
-end
-
-
-export FIR, movingaverage
-
-function FIR(x::Vector{T}, filtercoeffs::Vector{T}) where T <: Real
-    filterin = CircularBuffer{T}(length(filtercoeffs))
-    out = similar(x)
-    for i in eachindex(x)
-        push!(filterin, x[i])
-        #println("filtercoeffs: ",filtercoeffs[1:length(filterin)])
-        out[i] = sum(filtercoeffs[1:length(filterin)] .* filterin)
-        #println("filterin: ", filterin)
-        #println("i: ", i, " length: ", length(filterin), " out[i]: ", out[i])
+function pulses(x::Vector{T}, pol::Polarity) where T <: Real
+    mid = 0.5*sum(extrema(x))
+    poscrosses = detectcrosses(x, mid, Rising)
+    negcrosses = detectcrosses(x, mid, Falling)
+    if !isempty(poscrosses) && !isempty(negcrosses)
+        if length(poscrosses) == length(negcrosses)
+            if poscrosses[1] < negcrosses[1]
+                negcrosses .- poscrosses
+            else
+                popfirst!(negcrosses)
+                pop!(poscrosses)
+                negcrosses .- poscrosses
+            end
+        else
+            if length(poscrosses) > length(negcrosses)
+                if poscrosses[1] < negcrosses[1]
+                    pop!(poscrosses)
+                    negcrosses .- poscrosses
+                else
+                    popfirst!(poscrosses)
+                    negcrosses .- poscrosses
+                end
+            else
+                if poscrosses[1] < negcrosses[1]
+                    pop!(negcrosses)
+                    negcrosses .- poscrosses
+                else
+                    popfirst!(negcrosses)
+                    negcrosses .- poscrosses
+                end
+            end
+        end
+    else
+        nothing
     end
-    out
 end
 
-movingaverage(x::Vector{T}, n::Integer) where T <: Real = FIR(x, ones(n)./n)
+function periods(x::Vector{T}) where {T <: Real}
+    mid = 0.5*sum(extrema(x))
+    crosses = detectcrosses(x, mid, Rising)
+    diff(crosses)
+end
+period(x::Vector{T}) where {T <: Real} = periods(x)[1]
 
 export dutycycle, risetime, falltime
 
-dutycycle(x::Vector{T}, pol::Polarity) where {T <: Real} = pulse(x, pol) / period(x)
+dutycycle(x::Vector{T}, pol::Polarity=ActiveHigh) where {T <: Real} = pulse(x, pol) / period(x)
 
 risetime(x::Vector{T} where T <: Real) = edgetime(x, Rising::Edge)
-falltime(x::Vector{T} where T <: Real) = -edgetime(x, Falling::Edge)
+falltime(x::Vector{T} where T <: Real) = try -edgetime(x, Falling::Edge); catch MethodError nothing; end
 
+export trigger
 
+function trigger(x::Vector{T}, thresh::T, pre::Integer, post::Integer, edge::Edge) where T <: Real
+    trig_point = detectcross(x, thresh, edge)
+    if trig_point != nothing
+        x[max(1,trig_point - pre) : min(length(x), trig_point + post)]
+    else
+        nothing
+    end
+end
 
 
 end
