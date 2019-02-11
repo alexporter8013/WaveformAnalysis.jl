@@ -16,10 +16,18 @@ println("Duty cycle high: ", dutycycle(b, ActiveHigh))
 println("Duty cycle low: ", dutycycle(b, ActiveLow))
 
 @testset "pulses" begin
-    @test pulses([0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0.0], ActiveHigh) == [2,2,2,2]
-    @test pulses([0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1.0], ActiveHigh) == [2,2,2]
-    @test pulses([1,1,0,0,1,1,0,0,1,1,0,0,1,1.0,0], ActiveHigh) == [2,2,2]
-    @test pulses([1,1,0,0,1,1,0,0,1,1,0,0,1,1.0], ActiveHigh) == [2,2]
+    @testset "active high" begin
+        @test pulses([0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0.0], ActiveHigh) == [2,2,2,2]
+        @test pulses([0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1.0], ActiveHigh) == [2,2,2]
+        @test pulses([1,1,0,0,1,1,0,0,1,1,0,0,1,1.0,0], ActiveHigh) == [2,2,2]
+        @test pulses([1,1,0,0,1,1,0,0,1,1,0,0,1,1.0], ActiveHigh) == [2,2]
+    end
+    @testset "active low" begin
+        @test pulses([1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0.0], ActiveLow) == [2,2,2,2]
+        @test pulses([0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1.0], ActiveLow) == [2,2,2]
+        @test pulses([1,1,0,0,1,1,0,0,1,1,0,0,1,1.0,0,1], ActiveLow) == [2,2,2,1]
+        @test pulses([1,1,0,0,1,1,0,0,1,1,0,0,1,1.0], ActiveLow) == [2,2,2]
+    end
 end
 
 @testset "detectcrosses" begin

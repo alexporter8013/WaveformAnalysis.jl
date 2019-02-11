@@ -45,45 +45,58 @@ function edgetime(x::Vector{T}, edge::Edge) where {T <: Real}
     end
 end
 
-function pulse(x::Vector{T}, pol::Polarity) where {T <: Real}
-    results = pulses(x,pol)[1]
-    
-end
+pulse(x::Vector{T}, pol::Polarity) where {T <: Real} = pulses(x,pol)[1]
+pulse(x::Vector{T}, thresh::T, pol::Polarity) where {T <: Real} = pulses(x,thresh,pol)[1]
+pulse(x::Vector{Bool}, pol::Polarity) = pulses(x,pol)[1]
+pulse(x::BitVector, pol::Polarity) = pulses(x,pol)[1]
 
-function pulses(x::Vector{T}, pol::Polarity) where T <: Real
-    mid = 0.5*sum(extrema(x))
-    poscrosses = detectcrosses(x, mid, Rising)
-    negcrosses = detectcrosses(x, mid, Falling)
+pulses(x::Vector{T}, pol::Polarity) where T <: Real = pulses(x, 0.5*sum(extrema(x)), pol)
+pulses(x::Vector{T}, thresh::T, pol::Polarity) where T <: Real = 
+    measurepulses(detectcrosses(x, thresh, Rising), detectcrosses(x, thresh, Falling), pol)
+pulses(x::Vector{Bool}, pol::Polarity) = pulses(x, pol)
+pulses(x::BitVector, pol::Polarity) = 
+    measurepulses(detectcrosses(x, Rising), detectcrosses(x, Falling), pol)
+
+
+function measurepulses(poscrosses::Vector{T}, negcrosses::Vector{T}, pol::Polarity) where T <: Int64
     if !isempty(poscrosses) && !isempty(negcrosses)
-        if length(poscrosses) == length(negcrosses)
-            if poscrosses[1] < negcrosses[1]
-                negcrosses .- poscrosses
-            else
-                popfirst!(negcrosses)
-                pop!(poscrosses)
-                negcrosses .- poscrosses
-            end
+        if pol == ActiveHigh
+            alignedges!(poscrosses, negcrosses)
+            negcrosses .- poscrosses
         else
-            if length(poscrosses) > length(negcrosses)
-                if poscrosses[1] < negcrosses[1]
-                    pop!(poscrosses)
-                    negcrosses .- poscrosses
-                else
-                    popfirst!(poscrosses)
-                    negcrosses .- poscrosses
-                end
-            else
-                if poscrosses[1] < negcrosses[1]
-                    pop!(negcrosses)
-                    negcrosses .- poscrosses
-                else
-                    popfirst!(negcrosses)
-                    negcrosses .- poscrosses
-                end
-            end
+            alignedges!(negcrosses, poscrosses)
+            poscrosses .- negcrosses
         end
     else
         nothing
+    end
+end
+
+#Aligns two edge arrays such that all x comes before all y. This assumes 
+#each array is regular since they are detected edges. Operates on the
+#vector of indices returned by detectcrosses
+function alignedges!(x::Vector{T}, y::Vector{T}) where T <: Int64
+    if length(x) == length(y)
+        if x[1] < y[1]
+            return
+        else
+            popfirst!(y)
+            pop!(x)
+        end
+    else
+        if length(x) > length(y)
+            if x[1] < y[1]
+                pop!(x)
+            else
+                popfirst!(x)
+            end
+        else
+            if x[1] < y[1]
+                pop!(y)
+            else
+                popfirst!(y)
+            end
+        end
     end
 end
 
