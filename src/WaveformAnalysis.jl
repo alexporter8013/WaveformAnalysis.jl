@@ -110,15 +110,14 @@ export period, periods
 
 export dutycycle, risetime, falltime
 
-#dutycycle(x::Vector{T}, pol::Polarity) where {T <: Real} = pulse(x, pol) / period(x)
 dutycycle(x::Vector{T}, pol::Polarity) where {T <: Real} = pulse(x, pol) / period(x)
-#dutycycle(x::Vector{T}, pol::Polarity) where {T <: Real} = dutycycle
 dutycycle(x::Vector{T}, thresh::T, pol::Polarity) where {T <: Real} = pulse(x, thresh, pol) / period(x, thresh)
 
+# Need to finish these later
 #dutycycles(x::Vector{T}, pol::Polarity) where T <: Real = pulses(x, pol) ./ periods(x)
 #dutycycles(x::Vector{T}, pol::Polarity) where T <: Real = pulses(x, pol) ./ periods(x)
-dutycycles(x::Vector{T}, pol::Polarity) where T <: Real = dutycycles()
-dutycycles(x::Vector{T}, thresh::T, pol::Polarity) where T <: Real = pulses(x, thresh, pol) ./ periods(x, thresh)
+#dutycycles(x::Vector{T}, pol::Polarity) where T <: Real = dutycycles()
+#dutycycles(x::Vector{T}, thresh::T, pol::Polarity) where T <: Real = pulses(x, thresh, pol) ./ periods(x, thresh)
 
 risetime(x::Vector{T} where T <: Real) = edgetime(x, Rising::Edge)
 falltime(x::Vector{T} where T <: Real) = try -edgetime(x, Falling::Edge); catch MethodError nothing; end
